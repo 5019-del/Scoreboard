@@ -2,128 +2,206 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Sync Scoreboard for OBS</title>
-    <!-- Nhúng thư viện Firebase -->
+    <title>Professional Live Scoreboard</title>
+    <!-- Nhúng Firebase -->
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        :root { --team-a: #1040a3; --team-b: #c8102e; }
-        body { background-color: transparent; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial; }
-        #main-ui { display: none; }
-        .scoreboard { display: flex; height: 45px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden; }
-        .box { display: flex; align-items: center; justify-content: center; padding: 0 15px; font-weight: bold; font-size: 22px; outline: none; }
-        .team-a { background: var(--team-a); color: white; min-width: 65px; }
-        .score { background: white; color: #000033; min-width: 80px; }
-        .team-b { background: var(--team-b); color: white; min-width: 65px; }
-        .timer { background: white; color: black; min-width: 90px; border-left: 1px solid #ddd; }
-        .phase { background: rgba(0,0,0,0.8); color: #ffcc00; font-size: 11px; font-weight: bold; padding: 2px 10px; border-radius: 3px 3px 0 0; align-self: flex-start; }
-        .admin-controls { margin-top: 20px; background: #333; padding: 10px; border-radius: 8px; color: white; display: none; }
+        :root {
+            --team-a-bg: #1040a3;
+            --team-b-bg: #c8102e;
+            --white: #ffffff;
+            --text-dark: #000033;
+        }
+
+        body {
+            background-color: transparent; /* Để dùng làm lớp phủ trong OBS */
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* Giao diện giống image_ea5f9b.png */
+        .wrapper { display: flex; flex-direction: column; align-items: flex-start; }
+
+        .phase {
+            background: #000;
+            color: #ffcc00;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 10px;
+            border-radius: 3px 3px 0 0;
+            outline: none;
+        }
+
+        .scoreboard {
+            display: flex;
+            height: 48px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border-radius: 2px;
+            overflow: hidden;
+            background: var(--white);
+        }
+
+        .box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            font-weight: bold;
+            font-size: 24px;
+            outline: none;
+        }
+
+        .team-a { background: var(--team-a-bg); color: white; min-width: 70px; }
+        .score { color: var(--text-dark); min-width: 80px; letter-spacing: 2px; }
+        .team-b { background: var(--team-b-bg); color: white; min-width: 70px; }
+        .timer { color: var(--text-dark); min-width: 90px; border-left: 1px solid #eee; font-weight: 500; }
+
+        /* Bảng điều khiển admin */
+        .admin-panel {
+            margin-top: 25px;
+            background: #222;
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: none; /* Chỉ hiện cho Admin */
+            gap: 15px;
+            align-items: center;
+            color: white;
+            font-size: 13px;
+        }
+
+        input[type="color"] { border: none; width: 25px; height: 25px; cursor: pointer; background: none; }
+        button {
+            padding: 6px 15px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        .btn-start { background: #28a745; color: white; }
+        .btn-reset { background: #6c757d; color: white; }
     </style>
 </head>
 <body>
 
-<div id="auth-gate"></div>
-
-<div id="main-ui">
-    <div class="phase" id="phase" contenteditable="true">1ST</div>
+<div class="wrapper">
+    <div class="phase" id="phase" contenteditable="false">1ST</div>
     <div class="scoreboard">
-        <div class="box team-a" id="teamA" contenteditable="true">BIR</div>
+        <div class="box team-a" id="teamA" contenteditable="false">BIR</div>
         <div class="box score">
-            <span id="scoreA" contenteditable="true">0</span>-<span id="scoreB" contenteditable="true">0</span>
+            <span id="scoreA" contenteditable="false">0</span>-<span id="scoreB" contenteditable="false">0</span>
         </div>
-        <div class="box team-b" id="teamB" contenteditable="true">WRE</div>
-        <div class="box timer" id="timerDisplay">00:00</div>
+        <div class="box team-b" id="teamB" contenteditable="false">WRE</div>
+        <div class="box timer" id="timerDisplay" contenteditable="false">00:00</div>
     </div>
 
-    <!-- Chỉ hiện khi là người điều khiển -->
-    <div class="admin-controls" id="controls">
-        <button onclick="toggleTimer()">Start/Stop</button>
-        <button onclick="resetTimer()">Reset</button>
-        <input type="color" oninput="updateColor('A', this.value)" value="#1040a3">
-        <input type="color" oninput="updateColor('B', this.value)" value="#c8102e">
-        <p style="font-size: 10px;">Thay đổi thông tin sẽ tự đồng bộ sang OBS BLV</p>
+    <!-- Panel điều khiển -->
+    <div class="admin-panel" id="adminPanel">
+        Team 1: <input type="color" id="cpA" value="#1040a3" oninput="pushColor('A', this.value)">
+        Team 2: <input type="color" id="cpB" value="#c8102e" oninput="pushColor('B', this.value)">
+        <button class="btn-start" onclick="toggleTimer()" id="startBtn">START</button>
+        <button class="btn-reset" onclick="resetTimer()">RESET</button>
     </div>
 </div>
 
 <script>
-    // --- CẤU HÌNH FIREBASE ---
+    // 1. DÁN CẤU HÌNH FIREBASE
     const firebaseConfig = {
         databaseURL: "https://scoreboard-742ce-default-rtdb.firebaseio.com/"
     };
     firebase.initializeApp(firebaseConfig);
-    const db = firebase.database().ref("match_data");
+    const db = firebase.database().ref("live_match");
 
-    // --- BIẾN TRẠNG THÁI ---
     let isAdmin = false;
-    let timerInterval;
+    const SECRET_KEY = "FI68"; // Thay key của bạn
 
-    // --- KIỂM TRA QUYỀN TRUY CẬP ---
-    const key = prompt("Nhập KEY (Để trống nếu chỉ xem trên OBS):");
-    if(key === "FI68") {
-        isAdmin = true;
-        document.getElementById('controls').style.display = 'flex';
-    }
-    document.getElementById('main-ui').style.display = 'block';
-
-    // --- ĐỒNG BỘ DỮ LIỆU TỪ FIREBASE ---
-    db.on("value", (snapshot) => {
-        const data = snapshot.val();
-        if(!data) return;
-        
-        // Cập nhật giao diện (cho cả Admin và OBS)
-        if(!isAdmin) { // Nếu là người xem thì mới cập nhật đè nội dung
-            document.getElementById('phase').innerText = data.phase;
-            document.getElementById('teamA').innerText = data.teamA;
-            document.getElementById('teamB').innerText = data.teamB;
-            document.getElementById('scoreA').innerText = data.scoreA;
-            document.getElementById('scoreB').innerText = data.scoreB;
-        }
-        document.getElementById('timerDisplay').innerText = data.time;
-        document.documentElement.style.setProperty('--team-a', data.colorA);
-        document.documentElement.style.setProperty('--team-b', data.colorB);
-    });
-
-    // --- GỬI DỮ LIỆU LÊN FIREBASE (CHỈ ADMIN) ---
-    if(isAdmin) {
-        const sync = () => {
-            db.update({
-                phase: document.getElementById('phase').innerText,
-                teamA: document.getElementById('teamA').innerText,
-                teamB: document.getElementById('teamB').innerText,
-                scoreA: document.getElementById('scoreA').innerText,
-                scoreB: document.getElementById('scoreB').innerText,
-                colorA: getComputedStyle(document.documentElement).getPropertyValue('--team-a'),
-                colorB: getComputedStyle(document.documentElement).getPropertyValue('--team-b')
+    // 2. KIỂM TRA QUYỀN
+    window.onload = function() {
+        const entry = prompt("Nhập KEY (Để trống nếu dùng cho OBS):");
+        if (entry === SECRET_KEY) {
+            isAdmin = true;
+            document.getElementById('adminPanel').style.display = 'flex';
+            // Cho phép Admin sửa trực tiếp trên giao diện[cite: 2]
+            document.querySelectorAll('[contenteditable]').forEach(el => {
+                el.contentEditable = "true";
+                el.addEventListener('input', pushData);
             });
-        };
-        // Thay đổi chữ
-        document.querySelectorAll('[contenteditable]').forEach(el => {
-            el.addEventListener('input', sync);
+        }
+    };
+
+    // 3. ĐỒNG BỘ DỮ LIỆU[cite: 2]
+    function pushData() {
+        if (!isAdmin) return;
+        db.update({
+            phase: document.getElementById('phase').innerText,
+            teamA: document.getElementById('teamA').innerText,
+            teamB: document.getElementById('teamB').innerText,
+            scoreA: document.getElementById('scoreA').innerText,
+            scoreB: document.getElementById('scoreB').innerText
         });
     }
 
-    // --- LOGIC ĐỒNG HỒ ---
+    function pushColor(team, val) {
+        if (team === 'A') db.update({ colorA: val });
+        else db.update({ colorB: val });
+    }
+
+    // 4. LẮNG NGHE THAY ĐỔI (Dành cho OBS và Admin)[cite: 2]
+    db.on("value", (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
+        
+        // Cập nhật text (Chỉ đè lên khi không phải đang gõ hoặc là người xem)
+        if (!isAdmin) {
+            document.getElementById('phase').innerText = data.phase || "1ST";
+            document.getElementById('teamA').innerText = data.teamA || "BIR";
+            document.getElementById('teamB').innerText = data.teamB || "WRE";
+            document.getElementById('scoreA').innerText = data.scoreA || "0";
+            document.getElementById('scoreB').innerText = data.scoreB || "0";
+        }
+        document.getElementById('timerDisplay').innerText = data.time || "00:00";
+        
+        // Cập nhật màu sắc
+        document.documentElement.style.setProperty('--team-a-bg', data.colorA || "#1040a3");
+        document.documentElement.style.setProperty('--team-b-bg', data.colorB || "#c8102e");
+    });
+
+    // 5. LOGIC ĐỒNG HỒ (CHỈ ADMIN CHẠY)[cite: 2]
+    let timerRef;
     function toggleTimer() {
-        if(!isAdmin) return;
-        let isRunning = false; 
-        // Logic đồng hồ admin sẽ tính toán và db.update({ time: ... }) mỗi giây
-        // Để đơn giản, Admin sẽ đếm giây và gửi giá trị thời gian lên Firebase
-        if(window.timerActive) {
-            clearInterval(window.timerActive);
-            window.timerActive = null;
+        if (!isAdmin) return;
+        const btn = document.getElementById('startBtn');
+        if (window.activeTimer) {
+            clearInterval(window.activeTimer);
+            window.activeTimer = null;
+            btn.innerText = "START";
+            btn.style.background = "#28a745";
         } else {
-            window.timerActive = setInterval(() => {
-                let timeParts = document.getElementById('timerDisplay').innerText.split(':');
-                let sec = parseInt(timeParts[0])*60 + parseInt(timeParts[1]) + 1;
-                let display = Math.floor(sec/60).toString().padStart(2,'0') + ":" + (sec%60).toString().padStart(2,'0');
-                db.update({ time: display });
+            window.activeTimer = setInterval(() => {
+                let parts = document.getElementById('timerDisplay').innerText.split(':');
+                let totalSec = parseInt(parts[0]) * 60 + parseInt(parts[1]) + 1;
+                let min = Math.floor(totalSec / 60).toString().padStart(2, '0');
+                let sec = (totalSec % 60).toString().padStart(2, '0');
+                db.update({ time: `${min}:${sec}` });
             }, 1000);
+            btn.innerText = "STOP";
+            btn.style.background = "#dc3545";
         }
     }
 
-    function updateColor(team, val) {
-        if(team === 'A') db.update({ colorA: val });
-        else db.update({ colorB: val });
+    function resetTimer() {
+        if (!isAdmin) return;
+        if (window.activeTimer) clearInterval(window.activeTimer);
+        window.activeTimer = null;
+        db.update({ time: "00:00" });
+        document.getElementById('startBtn').innerText = "START";
+        document.getElementById('startBtn').style.background = "#28a745";
     }
 </script>
 </body>
