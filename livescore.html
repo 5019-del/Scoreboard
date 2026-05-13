@@ -2,195 +2,129 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Scoreboard</title>
+    <title>Sync Scoreboard for OBS</title>
+    <!-- Nhúng thư viện Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        :root {
-            --team-a-bg: #1040a3; 
-            --team-b-bg: #c8102e; 
-            --white-bg: #ffffff;
-            --text-dark: #000033;
-            --text-light: #ffffff;
-        }
-
-        /* Ẩn nội dung khi chưa nhập key */
-        #main-content { display: none; }
-
-        body {
-            font-family: 'Arial', sans-serif;
-            background-color: #1a1a1a;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            color: white;
-        }
-
-        .scoreboard-wrapper {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-        }
-
-        .match-phase {
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #ffcc00;
-            font-size: 11px;
-            font-weight: bold;
-            padding: 2px 10px;
-            text-transform: uppercase;
-            border-radius: 3px 3px 0 0;
-            outline: none;
-        }
-
-        .scoreboard-container {
-            display: flex;
-            height: 45px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
-            overflow: hidden;
-            border-radius: 2px;
-        }
-
-        .box {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            padding: 0 15px;
-            font-weight: bold;
-            font-size: 22px;
-            outline: none;
-        }
-
-        .team-a { background-color: var(--team-a-bg); color: var(--text-light); min-width: 65px; transition: background 0.3s; }
-        .score { background-color: var(--white-bg); color: var(--text-dark); min-width: 80px; font-size: 24px; }
-        .team-b { background-color: var(--team-b-bg); color: var(--text-light); min-width: 65px; transition: background 0.3s; }
-        
-        .timer-container {
-            background-color: var(--white-bg);
-            color: var(--text-dark);
-            min-width: 90px;
-            border-left: 1px solid #ddd;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #timer-display { font-weight: 500; outline: none; }
-
-        .controls {
-            margin-top: 25px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            background: #333;
-            padding: 10px 20px;
-            border-radius: 8px;
-        }
-
-        .color-group { display: flex; align-items: center; gap: 8px; color: white; font-size: 12px; }
-        input[type="color"] { border: none; width: 25px; height: 25px; cursor: pointer; background: none; }
-        button { padding: 6px 12px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; text-transform: uppercase; font-size: 11px; }
-        .btn-start { background: #28a745; color: white; }
-        .btn-reset { background: #6c757d; color: white; }
+        :root { --team-a: #1040a3; --team-b: #c8102e; }
+        body { background-color: transparent; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: Arial; }
+        #main-ui { display: none; }
+        .scoreboard { display: flex; height: 45px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden; }
+        .box { display: flex; align-items: center; justify-content: center; padding: 0 15px; font-weight: bold; font-size: 22px; outline: none; }
+        .team-a { background: var(--team-a); color: white; min-width: 65px; }
+        .score { background: white; color: #000033; min-width: 80px; }
+        .team-b { background: var(--team-b); color: white; min-width: 65px; }
+        .timer { background: white; color: black; min-width: 90px; border-left: 1px solid #ddd; }
+        .phase { background: rgba(0,0,0,0.8); color: #ffcc00; font-size: 11px; font-weight: bold; padding: 2px 10px; border-radius: 3px 3px 0 0; align-self: flex-start; }
+        .admin-controls { margin-top: 20px; background: #333; padding: 10px; border-radius: 8px; color: white; display: none; }
     </style>
 </head>
 <body>
 
-    <!-- Nội dung bảng điểm -->
-    <div id="main-content">
-        <div class="scoreboard-wrapper">
-            <div class="match-phase" contenteditable="true">1ST</div>
-            
-            <div class="scoreboard-container">
-                <div class="box team-a" contenteditable="true">BIR</div>
-                <div class="box score">
-                    <span contenteditable="true">0</span>
-                    <span>-</span>
-                    <span contenteditable="true">0</span>
-                </div>
-                <div class="box team-b" contenteditable="true">WRE</div>
-                <div class="timer-container">
-                    <div id="timer-display" contenteditable="true">00:00</div>
-                </div>
-            </div>
+<div id="auth-gate"></div>
 
-            <div class="controls">
-                <div class="color-group">
-                    Team 1: <input type="color" id="colorA" value="#1040a3" oninput="changeColor('A', this.value)">
-                </div>
-                <div class="color-group">
-                    Team 2: <input type="color" id="colorB" value="#c8102e" oninput="changeColor('B', this.value)">
-                </div>
-                <button class="btn-start" onclick="toggleTimer()" id="startBtn">Start</button>
-                <button class="btn-reset" onclick="resetTimer()">Reset</button>
-            </div>
+<div id="main-ui">
+    <div class="phase" id="phase" contenteditable="true">1ST</div>
+    <div class="scoreboard">
+        <div class="box team-a" id="teamA" contenteditable="true">BIR</div>
+        <div class="box score">
+            <span id="scoreA" contenteditable="true">0</span>-<span id="scoreB" contenteditable="true">0</span>
         </div>
+        <div class="box team-b" id="teamB" contenteditable="true">WRE</div>
+        <div class="box timer" id="timerDisplay">00:00</div>
     </div>
 
+    <!-- Chỉ hiện khi là người điều khiển -->
+    <div class="admin-controls" id="controls">
+        <button onclick="toggleTimer()">Start/Stop</button>
+        <button onclick="resetTimer()">Reset</button>
+        <input type="color" oninput="updateColor('A', this.value)" value="#1040a3">
+        <input type="color" oninput="updateColor('B', this.value)" value="#c8102e">
+        <p style="font-size: 10px;">Thay đổi thông tin sẽ tự đồng bộ sang OBS BLV</p>
+    </div>
+</div>
+
 <script>
-    // 1. CẤU HÌNH KEY CỦA BẠN TẠI ĐÂY
-    const SECRET_KEY = "FI68"; 
-
-    // Kiểm tra key khi vừa mở trang
-    window.onload = function() {
-        const userKey = prompt("进攻");
-        if (userKey === SECRET_KEY) {
-            document.getElementById('main-content').style.display = 'block';
-        } else {
-            alert("Warning");
-            document.body.innerHTML = "<h1 style='color:red; text-align:center;'>ACCESS DENIED</h1>";
-        }
+    // --- CẤU HÌNH FIREBASE ---
+    const firebaseConfig = {
+        databaseURL: "https://scoreboard-742ce-default-rtdb.firebaseio.com/"
     };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref("match_data");
 
-    // Logic Đổi màu
-    function changeColor(team, color) {
-        if(team === 'A') {
-            document.documentElement.style.setProperty('--team-a-bg', color);
-        } else {
-            document.documentElement.style.setProperty('--team-b-bg', color);
-        }
-    }
-
-    // Logic Đồng hồ
+    // --- BIẾN TRẠNG THÁI ---
+    let isAdmin = false;
     let timerInterval;
-    let totalSeconds = 0;
-    let isRunning = false;
 
-    function updateDisplay() {
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        document.getElementById('timer-display').innerText = 
-            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // --- KIỂM TRA QUYỀN TRUY CẬP ---
+    const key = prompt("Nhập KEY (Để trống nếu chỉ xem trên OBS):");
+    if(key === "FI68") {
+        isAdmin = true;
+        document.getElementById('controls').style.display = 'flex';
     }
+    document.getElementById('main-ui').style.display = 'block';
 
-    function toggleTimer() {
-        const btn = document.getElementById('startBtn');
-        if (isRunning) {
-            clearInterval(timerInterval);
-            btn.innerText = "Start";
-            btn.style.background = "#28a745";
-        } else {
-            const currentTime = document.getElementById('timer-display').innerText.split(':');
-            totalSeconds = (parseInt(currentTime[0]) * 60) + parseInt(currentTime[1]);
-            timerInterval = setInterval(() => { totalSeconds++; updateDisplay(); }, 1000);
-            btn.innerText = "Stop";
-            btn.style.background = "#dc3545";
+    // --- ĐỒNG BỘ DỮ LIỆU TỪ FIREBASE ---
+    db.on("value", (snapshot) => {
+        const data = snapshot.val();
+        if(!data) return;
+        
+        // Cập nhật giao diện (cho cả Admin và OBS)
+        if(!isAdmin) { // Nếu là người xem thì mới cập nhật đè nội dung
+            document.getElementById('phase').innerText = data.phase;
+            document.getElementById('teamA').innerText = data.teamA;
+            document.getElementById('teamB').innerText = data.teamB;
+            document.getElementById('scoreA').innerText = data.scoreA;
+            document.getElementById('scoreB').innerText = data.scoreB;
         }
-        isRunning = !isRunning;
+        document.getElementById('timerDisplay').innerText = data.time;
+        document.documentElement.style.setProperty('--team-a', data.colorA);
+        document.documentElement.style.setProperty('--team-b', data.colorB);
+    });
+
+    // --- GỬI DỮ LIỆU LÊN FIREBASE (CHỈ ADMIN) ---
+    if(isAdmin) {
+        const sync = () => {
+            db.update({
+                phase: document.getElementById('phase').innerText,
+                teamA: document.getElementById('teamA').innerText,
+                teamB: document.getElementById('teamB').innerText,
+                scoreA: document.getElementById('scoreA').innerText,
+                scoreB: document.getElementById('scoreB').innerText,
+                colorA: getComputedStyle(document.documentElement).getPropertyValue('--team-a'),
+                colorB: getComputedStyle(document.documentElement).getPropertyValue('--team-b')
+            });
+        };
+        // Thay đổi chữ
+        document.querySelectorAll('[contenteditable]').forEach(el => {
+            el.addEventListener('input', sync);
+        });
     }
 
-    function resetTimer() {
-        clearInterval(timerInterval);
-        isRunning = false;
-        totalSeconds = 0;
-        updateDisplay();
-        document.getElementById('startBtn').innerText = "Start";
-        document.getElementById('startBtn').style.background = "#28a745";
+    // --- LOGIC ĐỒNG HỒ ---
+    function toggleTimer() {
+        if(!isAdmin) return;
+        let isRunning = false; 
+        // Logic đồng hồ admin sẽ tính toán và db.update({ time: ... }) mỗi giây
+        // Để đơn giản, Admin sẽ đếm giây và gửi giá trị thời gian lên Firebase
+        if(window.timerActive) {
+            clearInterval(window.timerActive);
+            window.timerActive = null;
+        } else {
+            window.timerActive = setInterval(() => {
+                let timeParts = document.getElementById('timerDisplay').innerText.split(':');
+                let sec = parseInt(timeParts[0])*60 + parseInt(timeParts[1]) + 1;
+                let display = Math.floor(sec/60).toString().padStart(2,'0') + ":" + (sec%60).toString().padStart(2,'0');
+                db.update({ time: display });
+            }, 1000);
+        }
+    }
+
+    function updateColor(team, val) {
+        if(team === 'A') db.update({ colorA: val });
+        else db.update({ colorB: val });
     }
 </script>
-
 </body>
 </html>
